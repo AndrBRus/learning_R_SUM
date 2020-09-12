@@ -24,4 +24,5 @@ print(X) # matrix X output
 Y <- c(-2, 73, -25, -14, 68) 
 #vector of paired linear regression parameters
 result_matrix = round(solve(t(X) %*% X) %*% t(X) %*% Y, 1)
+cat('result (3);', '\n')
 print(result_matrix)
