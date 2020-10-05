@@ -32,4 +32,3 @@ pie(finance_data_2007_2017$year_2007, labels = finance_table_labels(finance_data
 pie(finance_data_2007_2017$year_2017, labels = finance_table_labels(finance_data_2007_2017$year_2017, finance_data_2007_2017$п.їtax), main = '2017 year financial report', cex.main = 2)
 #close this plot editing
 dev.off(which = dev.cur())
-
