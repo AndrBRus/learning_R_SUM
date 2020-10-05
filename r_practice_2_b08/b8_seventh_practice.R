@@ -10,7 +10,7 @@ finance_table_labels <- function(csv_meaning, csv_labels) {
   labels_table <- paste(labels_table, '(', per_parts)
   labels_table <- paste(labels_table, '%)', sep = '')
   #return value
-  labels_table
+  return(labels_table)
 }
 
 # FIRST STEP 
