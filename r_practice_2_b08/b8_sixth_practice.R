@@ -23,7 +23,7 @@ layout(matrix(c(1, 1,
                 2, 2),
               2, 2, byrow = TRUE))
 #create a histogram random variable  x
-hist(x, freq = FALSE, col = '#7C8D8D', cex.axis = 1.5, cex.lab = 1.5, cex.main = 1.5)
+hist(x, freq = FALSE, col = '#7C8D8D', cex.axis = 1.5, cex.lab = 1.5, cex.main = 1.5, ylim = c(0, 0.25))
 #create a line of theoretical distribution density for x
 curve(dt(x, 3, 4), col = '#D4F900', lwd = 3, add = TRUE)
 #create a line of actual distribution density for x
