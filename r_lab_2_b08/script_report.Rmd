@@ -1,0 +1,309 @@
+---
+title: "Лабораторная работа №2. Регрессионные модели. Вариант №8"
+author: "Андрей Владимиров"
+date: "`r format(Sys.Date(), '%b %d %y')`"
+output: word_document
+---
+```{r setup, include = FALSE}
+library(knitr)
+library('stats')  # для функции p.adjust()
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# РАЗДЕЛ 0. Выгрузка данных из файла
+
+Первое, что необходимо сделать, это выгрузить данные из файла, который расположен в папке с проектом и имеет расширение RData (labs_VladimirovAA_data.Rdata).
+
+```{r load_data}
+# сохраняем название файла в переменную
+file_name = 'labs_VladimirovAA_data.RData'
+# загрузка данных из файла
+load(file_name)
+```
+
+# РАЗДЕЛ 1. Регрессионная модель для нелогарифмированных данных
+
+#### Подготовка данных
+
+С помощью корреляционной модели из прошлой лабораторной работы, а именно "Лабораторная работа №1", мы узнали, что для нашей регрессионной модели подходят только следующие переменные:
+Корреляционная модель из прошлой лабораторной работы (лабораторная работа №1) 
+
+*   Y - оборот розничной торговли на душу населения в 2016;
+
+*   X1 - число малых предприятий на 10000 человек населения в 2016;
+
+*   X3 - расходы консолидированных бюджетов субъектов Российской Федерации (всего) в 2015.
+Количество наблюдений: `r nrow(regions_data)`.
+
+Модель: $Y = 123871.39 + 190.31X1 + 0.11X3$.
+
+#### Множественная регрессионная модель
+
+Построим модель множественной регрессии и выведем график зависимости Y от X1 и X3, который представлен ниже.
+
+```{r multiple_reg_model}
+# построение множественной регрессионной модели
+multiple_reg_model <- lm(Y ~ X1 + X3, data = regions_data)
+# вывод описательной статистики коэффициентов 
+kable(round(summary(multiple_reg_model)$coef, 3))
+# подготовка полотна под график 
+par(mfrow = c(1, 2))
+# вывод графика
+plot(Y ~ X1 + X3, data = regions_data)
+# возврат полотна в прежнее состояние
+par(mfrow = c(1, 1))
+```
+
+Гипотеза $H_0$: коэффициенты при X1 равен 0 в генеральной совокупности, то есть является незначимым;
+Гипотеза $H_1$:коэффициенты при X1 не равен 0 в генеральной совокупности, то есть является значимым;
+Проверка будет происходить за счет сравнения с P-значением при уровне значимости, равному 0.05.
+
+*Проверка параметра X1*
+
+P-значение при коэффициенте X1: $7.8\cdot10^{-7}$. P-значение X1 меньше, чем уровень значимости, то есть принимается гипотеза $H_1$.
+
+*Проверка параметра X3*
+
+P-значение при коэффициенте X3: $1.8\cdot10^{-11}$. P-значение X3 меньше, чем уровень значимости, то есть принимается гипотеза $H_1$.
+
+Коэффицент детерминации $R^2 =$ `r round(summary(multiple_reg_model)$r.sq, 2)`, тое есть составляет `r round(summary(multiple_reg_model)$r.sq, 2) * 100`%. Это означает, что `r round(summary(multiple_reg_model)$r.sq, 2) * 100`% разброса переменной Y, которая является зависимой, объясняется переменными X1 и X3.
+
+Вид модели после проверки параметров: $Y = 123871.39 + 190.31X1 + 0.11X3$.
+
+*Вывод*: все коэффициенты значимы, означающие, что исключать регрессоры не требуется.
+
+#### Модель с переменной структурой
+
+Под моделью с переменной структурой подразумивается модель, в которой учитывается, что каждый регион относится к одному из федеральных округов. При этом включим включим фиктивные переменны в константы и коэффициенты.
+
+Теперь постороим модель и выведем описательную статистику коэффициентов.
+
+```{r var_struct_model}
+# построение модели с переменной структурой
+var_struct_model <- lm(Y ~ Federal_district * (X1 + X3), data = regions_data)
+# вывод описательной статистики модели
+kable(round(summary(var_struct_model)$coef, 3))
+```
+
+Данная модель является незначима, в ней много незначимых параметров.
+Коэффициент детерминации $R^2 =$ `r round(summary(var_struct_model)$r.sq, 2)`, то есть `r round(summary(var_struct_model)$r.sq, 2) * 100`%.
+Необходимо исключить данные параметры. Для этого мы будем использовать функция 'removeFactorsByPValue' (ссылка: https://raw.githubusercontent.com/aksyuk/R-Practice-basics/master/user_functions/removeFactorsByPValue.R).
+
+Ниже представлена описательная статистика коэффициентов после исключения незначимых коэффициентов без учета P-значения:
+
+```{r exclud_var_struct_model}
+# создаем фрейм со всеми переменными-факторами
+var_struct_model.matrix <- model.matrix(Y ~ Federal_district * (X1 + X3), data = regions_data)
+# присоединяем независимую переменную
+var_struct_model.corr <- cbind(Y = regions_data$Y, data.frame(var_struct_model.matrix[,-1]))
+# сохраняем в другую переменную для дальнейшего сохранения для ЛР3
+save_var_struct_model.corr <- var_struct_model.corr
+# добавляем функцию последовательного исключения регрессоров (by aksyuk)
+source('https://raw.githubusercontent.com/aksyuk/R-Practice-basics/master/user_functions/removeFactorsByPValue.R')
+# применяем функцию для модели с переменной структурой без учета P-значения
+var_struct_model <- removeFactorsByPValue(data = var_struct_model.corr, y.var.name = 'Y')
+# выводим описательную статистику коэффициентов
+kable(round(summary(var_struct_model)$coef, 3))
+```
+
+Теперь у данной модели все значимые коэффициенты, при этом коэффициент детерминации $R^2 =$ `r round(summary(var_struct_model)$r.sq, 2)`, то есть `r round(summary(var_struct_model)$r.sq, 2) * 100`%.
+
+Константы оказались значимы для СЗФО, СФо и ЦФО.
+Коэффициент X1 значимы для СЗФО, ЦФО.
+Коэффициент X3 значимы для ПФО.
+
+#### Модель с поправкой Бонферрони:
+
+```{r bondferroni_amend_model}
+# построение модели с поправкой Бонферрони
+bondferroni_amend_model <- removeFactorsByPValue(data = var_struct_model.corr, y.var.name = 'Y', p.adj.method = 'bonferroni')
+# вывод описательной статистики коэффициентов
+kable(round(summary(bondferroni_amend_model)$coef, 3))
+```
+Как видно из описательной статистики, коэффициент X3 является значимым.
+Коэффициент детерминации $R^2 =$ `r round(summary(bondferroni_amend_model)$r.sq, 2)`, то есть `r round(summary(bondferroni_amend_model)$r.sq, 2) * 100`%.
+
+Явный вид модели: $Y = 146959.859 + 0.149X3$.
+
+#### Сравнение моделей 
+
+В данном части будет произведено сравнение трех моделей, которые были описаны выше, а именно: модель множественной регрессии, модель с переменной структурой и модель с поправкой Бонферрони.
+
+```{r comparison_models}
+# создаем список всех моделей
+comp_models_list <- list(multiple_reg_model, var_struct_model, bondferroni_amend_model)
+# изменяем заголовки списка
+names(comp_models_list) <- c('multiple regression model', 'variable structure model', 'bondferroni amendment model')
+# создание фрейма с результатамии сравнения
+stat_comp <- data.frame(Model = names(comp_models_list), corr_coeff_det = 0, calc_value_F = 0, standard_err = 0)
+# вычисление статистик для сравнения
+for (iter in 1:length(comp_models_list)) {
+  # скорректированный коэффициент детерминации
+  stat_comp[iter, 'corr_coeff_det'] <- round(summary(comp_models_list[[iter]])$adj.r.squared, 3)
+  # расчетное значение F 
+  stat_comp[iter, 'calc_value_F'] <- round(summary(comp_models_list[[iter]])$fstatistic[1], 3)
+  # стандартная ошибка 
+  stat_comp[iter, 'standard_err'] <- round(summary(comp_models_list[[iter]])$sigma, 3)
+}
+# вывод всех значений фрейма
+kable(stat_comp)
+```
+
+*Результаты сравнения*:
+
+* Сравнение $R^{2}$ показало, что более предпочтительная вторая модель (модель с переменной структурой);
+
+* Сравнение F статистик показало, что более предпочтительная третья модель (модель с поправкой Бонферрони);
+
+* Сравнение стандартных ошибок показало, что более предпочтительная вторая модель (модель с переменной структурой);
+
+* Среднее значение Y составляет 123115.9 (по итогам описательных статистик трех моделей)
+
+Таким образом, наиболее предпочтительная модель - модель по федеральным округам без поправки Бенферрони.
+
+*Конечный вид модели*:  $Y = 98516.435 + 90060.901FederaldistrictСЗФО - 48164.148FederaldistrictСФО + 122541.048FederaldistrictЦФО + 382.367X1 + 0.221X3 - 527.733FederaldistrictСЗФО.X1 - 827.039FederaldistrictСФО.X1 - 0.228FederaldistrictПФО.X3$ 
+
+# РАЗДЕЛ 2. Регрессионная модель для логарифмированных данных
+
+#### Подготовка данных
+
+С помощью корреляционной модели из прошлой лабораторной работы, а именно "Лабораторная работа №1", мы узнали, что для нашей регрессионной модели подходят только следующие переменные:
+Корреляционная модель из прошлой лабораторной работы (лабораторная работа №1) 
+
+*   Y - оборот розничной торговли на душу населения в 2016;
+
+*   X1 - число малых предприятий на 10000 человек населения в 2016;
+
+*   X3 - расходы консолидированных бюджетов субъектов Российской Федерации (всего) в 2015.
+Количество наблюдений: `r nrow(regions_data_log)`.
+
+Модель: $Y = 9.305 + 0.28X1 + 0.114X3$.
+
+#### Множественная регрессионная модель
+
+```{r multiple_reg_model_log}
+# построение множественной регрессионной модели
+multiple_reg_model_log <- lm(Y ~ X1 + X3, data = regions_data_log)
+# вывод описательной статистики коэффициентов 
+kable(round(summary(multiple_reg_model_log)$coef, 3))
+# подготовка полотна под график 
+par(mfrow = c(1, 2))
+# вывод графика
+plot(Y ~ X1 + X3, data = regions_data_log)
+# возврат полотна в прежнее состояние
+par(mfrow = c(1, 1))
+```
+
+Гипотеза $H_0$: коэффициенты при X1 равен 0 в генеральной совокупности, то есть является незначимым;
+Гипотеза $H_1$:коэффициенты при X1 не равен 0 в генеральной совокупности, то есть является значимым;
+Проверка будет происходить за счет сравнения с P-значением при уровне значимости, равному 0.05.
+
+*Проверка параметра X1*
+
+P-значение при коэффициенте X1: $3.4\cdot10^{-5}$. P-значение X1 меньше, чем уровень значимости, то есть принимается гипотеза $H_1$.
+
+*Проверка параметра X3*
+
+P-значение при коэффициенте X3: $1.1\cdot10^{-1}$. P-значение X3 меньше, чем уровень значимости, то есть принимается гипотеза $H_0$.
+
+Коэффицент детерминации $R^2 =$ `r round(summary(multiple_reg_model_log)$r.sq, 2)`, тое есть составляет `r round(summary(multiple_reg_model_log)$r.sq, 2) * 100`%. Это означает, что `r round(summary(multiple_reg_model_log)$r.sq, 2) * 100`% разброса переменной Y, которая является зависимой, объясняется переменными X1 и X3.
+
+*Вывод*: проверка коэффициентов показала, что коэффициент при X3 незначим, поэтому он исключается.
+
+Вид модели после проверки параметров: $Y = 9.305 + 0.28X1$.
+
+#### Модель с переменной структурой
+
+Под моделью с переменной структурой подразумивается модель, в которой учитывается, что каждый регион относится к одному из федеральных округов. При этом включим включим фиктивные переменны в константы и коэффициенты.
+
+Теперь постороим модель и выведем описательную статистику коэффициентов.
+
+```{r var_struct_model_log}
+# построение модели с переменной структурой
+var_struct_model_log <- lm(Y ~ Federal_district * X1, data = regions_data_log)
+# вывод описательной статистики модели
+kable(round(summary(var_struct_model_log)$coef, 3))
+```
+
+Данная модель является незначима, в ней много незначимых параметров.
+Коэффициент детерминации $R^2 =$ `r round(summary(var_struct_model_log)$r.sq, 2)`, то есть `r round(summary(var_struct_model_log)$r.sq, 2) * 100`%.
+Необходимо исключить данные параметры. Для этого мы будем использовать функция 'removeFactorsByPValue' (ссылка: https://raw.githubusercontent.com/aksyuk/R-Practice-basics/master/user_functions/removeFactorsByPValue.R).
+
+Ниже представлена описательная статистика коэффициентов после исключения незначимых коэффициентов без учета P-значения:
+
+```{r exclud_var_struct_model_log}
+# создаем фрейм со всеми переменными-факторами
+var_struct_model_log.matrix <- model.matrix(Y ~ Federal_district * X1, data = regions_data_log)
+# присоединяем независимую переменную
+var_struct_model_log.corr <- cbind(Y = regions_data_log$Y, data.frame(var_struct_model_log.matrix[,-1]))
+# сохраняем в другую переменную для дальнейшего сохранения для ЛР3
+save_var_struct_model_log.corr <- var_struct_model_log.corr
+# добавляем функцию последовательного исключения регрессоров (by aksyuk)
+source('https://raw.githubusercontent.com/aksyuk/R-Practice-basics/master/user_functions/removeFactorsByPValue.R')
+# применяем функцию для модели с переменной структурой без учета P-значения
+var_struct_model_log <- removeFactorsByPValue(data = var_struct_model_log.corr, y.var.name = 'Y')
+# выводим описательную статистику коэффициентов
+kable(round(summary(var_struct_model_log)$coef, 3))
+```
+
+Теперь у данной модели все значимые коэффициенты, при этом коэффициент детерминации $R^2 =$ `r round(summary(var_struct_model_log)$r.sq, 2)`, то есть `r round(summary(var_struct_model_log)$r.sq, 2) * 100`%.
+
+Константы оказались значимы для СФО.
+Коэффициент X1 значимы для СФО.
+
+#### Модель с поправкой Бонферрони:
+
+```{r bondferroni_amend_model_log}
+# построение модели с поправкой Бонферрони
+bondferroni_amend_model_log <- removeFactorsByPValue(data = var_struct_model_log.corr, y.var.name = 'Y', p.adj.method = 'bonferroni')
+# вывод описательной статистики коэффициентов
+kable(round(summary(bondferroni_amend_model_log)$coef, 3))
+```
+Как видно из описательной статистики, коэффициент X3 является значимым.
+Коэффициент детерминации $R^2 =$ `r round(summary(bondferroni_amend_model_log)$r.sq, 2)`, то есть `r round(summary(bondferroni_amend_model_log)$r.sq, 2) * 100`%.
+
+Явный вид модели: $Y = 146959.859 + 0.149X3$.
+
+#### Сравнение моделей 
+
+В данном части будет произведено сравнение трех моделей, которые были описаны выше, а именно: модель множественной регрессии, модель с переменной структурой и модель с поправкой Бонферрони.
+
+```{r comparison_models_log}
+# создаем список всех моделей
+comp_models_list_log <- list(multiple_reg_model_log, var_struct_model_log, bondferroni_amend_model_log)
+# изменяем заголовки списка
+names(comp_models_list_log) <- c('multiple regression model', 'variable structure model', 'bondferroni amendment model')
+# создание фрейма с результатамии сравнения
+stat_comp_log <- data.frame(Model = names(comp_models_list), corr_coeff_det = 0, calc_value_F = 0, standard_err = 0)
+# вычисление статистик для сравнения
+for (iter in 1:length(comp_models_list_log)) {
+  # скорректированный коэффициент детерминации
+  stat_comp_log[iter, 'corr_coeff_det'] <- round(summary(comp_models_list_log[[iter]])$adj.r.squared, 3)
+  # расчетное значение F 
+  stat_comp_log[iter, 'calc_value_F'] <- round(summary(comp_models_list_log[[iter]])$fstatistic[1], 3)
+  # стандартная ошибка 
+  stat_comp_log[iter, 'standard_err'] <- round(summary(comp_models_list_log[[iter]])$sigma, 3)
+}
+# вывод всех значений фрейма
+kable(stat_comp_log)
+```
+
+*Результаты сравнения*:
+
+* Сравнение $R^{2}$ показало, что более предпочтительная вторая модель (модель с переменной структурой);
+
+* Сравнение F статистик показало, что более предпочтительная третья модель (модель с поправкой Бонферрони);
+
+* Сравнение стандартных ошибок показало, что более предпочтительная вторая модель (модель с переменной структурой);
+
+* Среднее значение Y составляет 123115.9 (по итогам описательных статистик трех моделей)
+
+Таким образом, наиболее предпочтительная модель - модель по федеральным округам без поправки Бенферрони.
+
+*Конечный вид модели*:  $Y = 98516.435 + 90060.901FederaldistrictСЗФО - 48164.148FederaldistrictСФО + 122541.048FederaldistrictЦФО + 382.367X1 + 0.221X3 - 527.733FederaldistrictСЗФО.X1 - 827.039FederaldistrictСФО.X1 - 0.228FederaldistrictПФО.X3$ 
+
+# РАЗДЕЛ 3. Сохранение даннных
+```{r save_data}
+# сохраняем данные в файл
+save(list = c(multiple_reg_model, var_struct_model, save_var_struct_model.corr, multiple_reg_model_log, var_struct_model_log, save_var_struct_model_log.corr, bondferroni_amend_model, bondferroni_amend_model_log, regions_data, regions_data_log, regions_data_load), file = 'lab2_VladimirovAA_data.RData')
+```
