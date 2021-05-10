@@ -1,0 +1,239 @@
+---
+title: "Упражнение 7"
+author: "Владимиров Андрей"
+date: "09 05 2021"
+output: html_document
+---
+
+Нелинейные модели
+Необходимо построить две модели:
+
+ - зависимости непрерывного отклика от одного непрерывного предиктора;
+ - зависимости вероятности (логит) от одного непрерывного предиктора.
+
+
+Для каждой модели:
+
+1 Указать смысл переменных модели, метод оценки и настроечный параметр (степень полинома, гиперпараметр λ, ширина окна s, число узлов – в зависимости от метода).
+
+2 Подогнать модель на всех наблюдениях, меняя значение настроечного параметра.
+
+3 Обосновать оптимальное значение настроечного параметра подходящим методом (кросс-валидация, ANOVA).
+
+4 Сделать прогноз на обучающую выборку по лучшей модели: модельные значения и ошибки прогноза.
+
+5 Построить график с фактическими наблюдениями, модельной кривой и 95% доверительными интервалами прогноза.
+
+В таблице ниже указаны набор данных, столбцы с переменными для модели и метод подгонки.
+
+
+Как сдавать: прислать на почту преподавателя ссылки:
+
+ - на html-отчёт с видимыми блоками кода (блоки кода с параметром echo = T), размещённый на rpubs.com.
+ - на код, генерирующий отчёт, в репозитории на github.com. В текст отчёта включить постановку задачи и ответы на вопросы задания.
+
+# Вариант - 8
+
+Модели: локальная регрессия.
+
+Данные: *`Auto {ISLR}’*.
+
+```{r setup, include=FALSE}
+
+library('ISLR')              # набор данных Auto
+library('splines')           # сплайны
+library('gam')               # обобщённые аддитивные модели
+library('akima')             # график двумерной плоскости
+library('ggplot2')           # красивые графики
+
+# загрузка данных Auto
+data('Auto')
+
+#?Auto
+
+# ядро
+my.seed <- 1
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Работаем с набором данных по стоимости жилья в пригороде Бостона. Присоединяем его к пространству имён функцией attach(), и дальше обращаемся напрямую к столбцам таблицы.
+
+```{r}
+attach(Auto)
+```
+
+Работаем со столбцами:
+
+- *displacement* – Объем двигателя (куб. дюймов);
+- *weight* – Масса автомобиля (кг.).
+
+##Локальная регрессия
+
+Судя по графику ниже, взаимосвязь доли торговых площадей и средневзвешенного расстояния до центров занятости нелинейна. Наблюдается также группа наблюдений с высоким значением weight, граница проходит примерно на уровне 280.
+
+```{r}
+gp <- ggplot(data = Auto, aes(x = weight, y = displacement))
+gp <- gp + geom_point() + geom_abline(slope = 0, intercept = 280, col = 'red')
+gp
+```
+
+# Зависимость доли торговых площадей от средневзвешенного расстояния до центров занятости (модель 1)
+
+```{r}
+
+# границы изменения переменной weight
+weightlims <- range(weight)
+
+# значения weight, для которых делаем прогноз (от min до max с шагом 1)
+weight.grid <- seq(from = weightlims[1], to = weightlims[2])
+
+# график
+plot(weight, displacement, xlim = weightlims, cex = 0.5, col = 'darkgrey')
+
+
+# подгоняем модель c окном 0.2
+fit1 <- loess(displacement ~ weight, cv = 0.2, data = Auto)
+
+# подгоняем модель c окном 0.7
+fit2 <- loess(displacement ~ 	weight, span = 0.7, data = Auto)
+
+# рисум модели
+lines(weight.grid, predict(fit1, data.frame(weight = weight.grid)),
+      col = 'red', lwd = 2)
+lines(weight.grid, predict(fit2, data.frame(weight = weight.grid)),
+      col = 'blue', lwd = 2)
+
+# легенда
+legend('topright', 
+       c('s = 0.2', 's = 0.7'),
+       col = c('red', 'blue'), lty = 1, lwd = 2, cex = 0.8)
+```
+
+#Определение оптимального настроечного параметра (модель 1)
+
+Подбор настроечного параметра (ширина окна s) осуществим с помощью кросс-валидации. Для того, чтобы параметр был оптимальным, необходимо минимизировать ошибку СV. Чем меньше окажется ширина окна, тем более локальной и извилистой будет модедь; в то же время очень большое значение параметра s приведёт к глобальной модели, построенной по всей обучающей выборке.
+
+```{r}
+# подгоняем модель с подбором ширины окна с помощью перекрёстной проверки
+fit <- loess(displacement ~ weight, cv = T, data = Auto)
+# параметр span
+fit$pars
+
+# лучшая модель (с окном 0.75)
+
+best.fit1 <- loess(displacement ~ weight, span = 0.75, data = Auto)
+```
+
+#Прогноз на обучающую выборку по лучшей модели (модель 1)
+
+```{r}
+# прогноз по лучшей модели
+preds <- predict(best.fit1, data.frame(weight = weight.grid), se = T)
+
+# границы доверительного интервала для площади нерозничных торговых площадей
+se.bands <- cbind(lower.bound = preds$fit - 2*preds$se.fit,
+                  upper.bound = preds$fit + 2*preds$se.fit)
+
+# смотрим результат
+round(head(se.bands), 2)
+
+# стандартные ошибки
+round(preds$se.fit, 2)
+```
+
+#График с фактическими наблюдениями, модельной кривой и 95% доверительными интервалами прогноза (модель 1)
+
+```{r}
+plot(weight, displacement, xlim = weightlims, type = 'n', ylab = 'P(displacement | weight)')
+
+# фактические наблюдения показываем засечками
+points(jitter(weight), displacement, cex = 0.5, pch = '|', col = 'darkgrey')
+
+pfit <- preds$fit
+
+# модель
+lines(weight.grid, pfit, lwd = 2, col = 'blue')
+
+# доверительные интервалы
+matlines(weight.grid, se.bands, lwd = 1, col = 'blue', lty = 3)
+
+# заголовок
+title('Локальная регрессия (модель 1)')
+```
+
+#Зависимость вероятности доли торговых площадей > 16.5 от средневзвешенного расстояния до центров занятости (модель 2)
+
+```{r}
+# график
+plot(weight, I(displacement>280), xlim = weightlims, cex = 0.5, col = 'darkgrey')
+
+title('Локальная регрессия')
+
+# подгоняем модель c окном 0.2
+fit3 <- loess(I(displacement>280) ~ weight, cv = 0.2, data = Auto)
+
+# подгоняем модель c окном 0.7
+fit4 <- loess(I(displacement>280) ~ weight, span = 0.7, data = Auto)
+
+# рисум модели
+lines(weight.grid, predict(fit3, data.frame(weight = weight.grid)),
+      col = 'red', lwd = 2)
+lines(weight.grid, predict(fit4, data.frame(weight = weight.grid)),
+      col = 'blue', lwd = 2)
+
+# легенда
+legend('topright', 
+       c('s = 0.2', 's = 0.7'),
+       col = c('red', 'blue'), lty = 1, lwd = 2, cex = 0.8)
+```
+
+#Определение оптимального настроечного параметра (модель 2)
+```{r}
+# подгоняем модель с подбором ширины окна с помощью перекрёстной проверки
+fit <- loess(I(displacement>280) ~ weight, cv = T, data = Auto)
+# параметр span
+fit$pars
+
+best.fit2 <- loess(I(displacement>280) ~ weight, span = 0.75, data = Auto)
+```
+
+#Прогноз на обучающую выборку по лучшей модели (модель 2)
+```{r}
+
+# прогнозы
+preds <- predict(best.fit2, data.frame(weight = weight.grid), se = T)
+
+# пересчитываем доверительные интервалы и прогнозы в исходные ЕИ
+pfit <- exp(preds$fit) / (1 + exp(preds$fit))
+se.bands.loess <- cbind(lower.bound = preds$fit - 2*preds$se.fit,
+                        upper.bound = preds$fit + 2*preds$se.fit)
+se.bands <- exp(se.bands.loess)/(1 + exp(se.bands.loess))
+
+   
+round(head(se.bands), 3)
+
+round(preds$se.fit, 2)
+```
+
+
+#График с фактическими наблюдениями, модельной кривой и 95% доверительными интервалами прогноза (модель 2)
+
+```{r}
+
+# сетка для графика (изображаем вероятности, поэтому интервал изменения y мал)
+plot(weight, I(displacement > 280), xlim = weightlims, type = 'n', ylim = c(0, 1),
+     ylab = 'P(displacement > 280 | weight)')
+
+# фактические наблюдения показываем засечками
+points(jitter(weight), I((displacement > 280)/5 ), cex = 0.5, pch = '|', col = 'darkgrey')
+
+# модель
+lines(weight.grid, pfit, lwd = 2, col = 'blue')
+
+# доверительные интервалы
+matlines(weight.grid, se.bands, lwd = 1, col = 'blue', lty = 3)
+
+# заголовок
+title('Локальная регрессия (модель 2)')
+```
